@@ -1,4 +1,4 @@
-The Personal Web Server and Personal Web Server 2 share infrastructure.
+The Personal Web Space and Personal Web Space 2 share infrastructure.
 
 The challenge begins with at 
 http://www.pws.chal.hitconctf.com/
@@ -31,28 +31,29 @@ See: https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh
 We also note that we can make symlinks.
 
 To find the first flag, we need to realize that the httpd server process must be able to read its own files and configuration.
-Taking advantage of these, we delete our public_html directory, and replace it with a symlink to '/'.
+Taking advantage of this, we delete our public_html directory, and replace it with a symlink to '/'.
+
 sftp> symlink / public_html
 
 We can now traverse the filesystem as the www-data user, via:
 http://www.pws.chal.hitconctf.com/~$username/
 
-This use can see additional files and directories, including /app and the http and nginx configurations.
+This use can see additional files and directories, including /app and the http configurations.
 
 Reviewing these we find in:
 /etc/apache2/sites-enabled/000-default.conf
 
-Reference to a /flag.txt at a url 'internal'.
+Proxying to a /flag.txt at a url 'internal'.
 
-The config file seems to block access to this url. 
+The config file seems to block access content at this url.
 However we can bypass with ssh using tunneling through the sftp service.
 
-sudo ssh -L 80:internal:80 -N -f username@file.pws.chal.hitconctf.com -p 10022
+> sudo ssh -L 80:internal:80 -N -f username@file.pws.chal.hitconctf.com -p 10022
 
 and not we can run
-wget localhost/flag.txt
+> wget localhost/flag.txt
 
-to get the flag.
+to get the first flag.
 
 For the second flag we need the password hash for a user "flagholder"
 
@@ -79,7 +80,7 @@ So, using our ssh tunnels we can connect to node10 via portmapper to find the yp
     100004    2   tcp    630  ypserv
     100004    1   tcp    630  ypserv
 
-To access the ypserv service on node10 we can again use our tunneling abilities.
+To access the ypserv service on node10 we can again use tunneling.
 > sudo ssh -L 630:172.26.0.10:630 -N -f user168@file.pws.chal.hitconctf.com -p 10022
 
 and then after installing yp-tools
@@ -89,5 +90,4 @@ we can dump the nis shadowed passwords
 > ypcat -d hitcon -h localhost passwd.byname
 
 and we find:
-
 flagholder:!$y$j9T$LNmGE79e0l4Rj6bKhTosA1$rP24Qc3XWuTvNKKn0fes4WWjbcptfskAaRQInBbKIO2:1500:1500::/home/flagholder:/usr/sbin/nologin
